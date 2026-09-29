@@ -510,17 +510,17 @@
         const appId = 'almiral-center'; // any fixed string you like, just keep it consistent
 
         const firebaseConfig = {
-            apiKey: "PASTE_YOUR_API_KEY_HERE",
-            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-            projectId: "YOUR_PROJECT_ID",
-            storageBucket: "YOUR_PROJECT_ID.firebasestorage.app",
-            messagingSenderId: "YOUR_SENDER_ID",
-            appId: "YOUR_APP_ID"
+            apiKey: "AIzaSyCHQly_mmZYmTRKkgjR31hznv_T41dCAY0",
+            authDomain: "almiral-5134c.firebaseapp.com",
+            projectId: "almiral-5134c",
+            storageBucket: "almiral-5134c.firebasestorage.app",
+            messagingSenderId: "911109776139",
+            appId: "1:911109776139:web:ff3711bc47d82bf9d0780e"
         };
 
         let app, auth, db, storage;
         try {
-            if (firebaseConfig.apiKey && firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY_HERE") {
+            if (firebaseConfig.apiKey && firebaseConfig.apiKey !== "AIzaSyCHQly_mmZYmTRKkgjR31hznv_T41dCAY0") {
                 app = initializeApp(firebaseConfig);
                 auth = getAuth(app);
                 db = getFirestore(app);
