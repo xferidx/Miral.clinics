@@ -464,7 +464,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, deleteDoc, onSnapshot, collection, getDocs, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, setDoc, deleteDoc, onSnapshot, collection, getDocs, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Firebase Setup
         // ⚠️ REPLACE the values below with YOUR OWN Firebase project config.
@@ -474,17 +474,17 @@
         const appId = 'almiral-center'; // any fixed string you like, just keep it consistent
 
         const firebaseConfig = {
-            apiKey: "PASTE_YOUR_API_KEY_HERE",
-            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-            projectId: "YOUR_PROJECT_ID",
-            storageBucket: "YOUR_PROJECT_ID.firebasestorage.app",
-            messagingSenderId: "YOUR_SENDER_ID",
-            appId: "YOUR_APP_ID"
+            apiKey: "AIzaSyCHQly_mmZYmTRKkgjR31hznv_T41dCAY0",
+            authDomain: "almiral-5134c.firebaseapp.com",
+            projectId: "almiral-5134c",
+            storageBucket: "almiral-5134c.firebasestorage.app",
+            messagingSenderId: "911109776139",
+            appId: "1:911109776139:web:ff3711bc47d82bf9d0780e"
         };
 
         let app, auth, db;
         try {
-            if (firebaseConfig.apiKey && firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY_HERE") {
+            if (firebaseConfig.apiKey && firebaseConfig.apiKey !== "AIzaSyCHQly_mmZYmTRKkgjR31hznv_T41dCAY0") {
                 app = initializeApp(firebaseConfig);
                 auth = getAuth(app);
                 db = getFirestore(app);
@@ -520,8 +520,21 @@
 
         // A real (non-anonymous) signed-in user is staff — patients booking appointments
         // are always anonymous, so this cleanly tells the two apart.
+        // Roles: superadmin (fixed email) | secretary | dentist (stored in staff_users/{uid}).
+        // Only secretary and super admin may run the reception panel; the real enforcement is in firestore.rules.
+        const SUPER_ADMIN_EMAIL = 'almiral@gmail.com';
+        window.currentRole = null;
+        async function resolveRole(user) {
+            if (!user || user.isAnonymous) return null;
+            if ((user.email || '').toLowerCase() === SUPER_ADMIN_EMAIL) return 'superadmin';
+            try {
+                const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff_users', user.uid));
+                if (snap.exists() && ['dentist', 'secretary'].includes(snap.data().role)) return snap.data().role;
+            } catch (e) { console.error('Role lookup failed:', e); }
+            return null;
+        }
         window.isStaffLoggedIn = function() {
-            return !!(auth && auth.currentUser && !auth.currentUser.isAnonymous);
+            return ['secretary', 'superadmin'].includes(window.currentRole);
         };
 
         // Remembers which panel the person wanted to open, so after a successful staff login
@@ -536,10 +549,16 @@
             // session with a fresh anonymous one on every page load.
             onAuthStateChanged(auth, async (user) => {
                 if (user) {
+                    window.currentRole = await resolveRole(user);
+                    if (!user.isAnonymous && !window.currentRole) {
+                        await signOut(auth); // an account without a role gets no staff access
+                        return;
+                    }
                     startListeners();
-                    cleanupPastBookings(); // purge yesterday-and-earlier bookings, keep today & future
+                    if (window.isStaffLoggedIn()) cleanupPastBookings(); // purge finished days (staff only)
                     window.updateStaffUI();
                 } else {
+                    window.currentRole = null;
                     try {
                         await signInAnonymously(auth);
                     } catch (e) {
@@ -986,13 +1005,24 @@
             if (!auth) return;
 
             try {
-                await signInWithEmailAndPassword(auth, email, password);
-                // onAuthStateChanged picks up the new session automatically (updates UI, listeners, etc).
+                const cred = await signInWithEmailAndPassword(auth, email, password);
+                const role = await resolveRole(cred.user);
+                if (!role) {
+                    errorEl.textContent = 'This account has not been activated yet. Please contact the super admin.';
+                    errorEl.classList.remove('hidden');
+                    await signOut(auth);
+                    return;
+                }
+                window.currentRole = role;
                 document.getElementById('staff-login-modal').classList.add('hidden');
                 document.getElementById('staff-login-modal').classList.remove('flex');
-
                 window.pendingStaffAction = null;
-                window.openSecretaryModal();
+                if (role === 'secretary' || role === 'superadmin') {
+                    cleanupPastBookings();
+                    window.openSecretaryModal();
+                } else {
+                    window.showMessage('تم تسجيل الدخول', 'حسابك مفعّل كطبيب. استخدم أيقونة السجلات (أعلى الصفحة) لفتح ملفات المرضى.', 'success');
+                }
             } catch (e) {
                 console.error(e);
                 errorEl.textContent = 'Incorrect email or password.';
