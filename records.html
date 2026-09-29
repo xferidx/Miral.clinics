@@ -64,6 +64,10 @@
            dark-background cards) turns the name/ID near-invisible against that light background. */
         #pinned-patients-list p.pinned-card-text { color: #1e3a8a !important; }
         #pinned-patients-list p.pinned-card-subtext { color: #1d4ed8 !important; }
+            /* Role-based visibility (the real enforcement is in firestore.rules) */
+        body:not([data-role="superadmin"]) .role-super { display: none !important; }
+        body[data-role="secretary"] .role-clinical { display: none !important; }
+        body[data-role="dentist"] .role-nodentist { display: none !important; }
     </style>
 </head>
 <body class="min-h-screen">
@@ -85,7 +89,8 @@
                 <button onclick="window.toggleDarkMode()" id="dark-toggle-btn" class="text-slate-400 hover:text-clinic transition-colors p-2 bg-slate-50 rounded-full hover:bg-clinic-light" title="Dark mode">
                     <i class="fa-solid fa-moon text-lg"></i>
                 </button>
-                <button id="records-logout-btn" onclick="window.staffLogout()" class="hidden text-xs font-bold text-slate-400 hover:text-red-500 transition-colors px-3 py-2 rounded-lg hover:bg-red-50">Log Out</button>
+                <span id="records-role-badge" class="hidden text-xs font-bold text-slate-500 bg-slate-100 px-3 py-2 rounded-lg"></span>
+<button id="records-logout-btn" onclick="window.staffLogout()" class="hidden text-xs font-bold text-slate-400 hover:text-red-500 transition-colors px-3 py-2 rounded-lg hover:bg-red-50">Log Out</button>
             </div>
         </div>
     </header>
@@ -115,9 +120,10 @@
                     <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
                     <input type="text" id="records-search-input" oninput="window.searchPatients()" placeholder="Search by name or ID..." class="w-full pl-11 pr-4 py-3 rounded-xl border-2 border-slate-200 focus:outline-none focus:border-clinic bg-white font-bold text-slate-800 shadow-sm">
                 </div>
-                <button onclick="window.openAddPatientForm()" class="bg-clinic text-white font-bold px-5 py-3 rounded-xl hover:bg-clinic-dark transition-colors shadow-md whitespace-nowrap"><i class="fa-solid fa-plus mr-1"></i> Add Patient</button>
-                <button onclick="window.openEndoFollowups()" class="bg-amber-500 hover:bg-amber-600 text-white font-bold px-5 py-3 rounded-xl transition-colors shadow-md whitespace-nowrap"><i class="fa-solid fa-tooth mr-1"></i> Endo Follow-Ups</button>
-                <button onclick="window.openFaqsModal()" class="bg-teal-500 hover:bg-teal-600 text-white font-bold px-5 py-3 rounded-xl transition-colors shadow-md whitespace-nowrap"><i class="fa-solid fa-comment-dots mr-1"></i> Chatbot FAQs</button>
+                <button onclick="window.openAddPatientForm()" class="role-nodentist bg-clinic text-white font-bold px-5 py-3 rounded-xl hover:bg-clinic-dark transition-colors shadow-md whitespace-nowrap"><i class="fa-solid fa-plus mr-1"></i> Add Patient</button>
+                <button onclick="window.openEndoFollowups()" class="role-clinical bg-amber-500 hover:bg-amber-600 text-white font-bold px-5 py-3 rounded-xl transition-colors shadow-md whitespace-nowrap"><i class="fa-solid fa-tooth mr-1"></i> Endo Follow-Ups</button>
+                <button onclick="window.openFaqsModal()" class="role-super bg-teal-500 hover:bg-teal-600 text-white font-bold px-5 py-3 rounded-xl transition-colors shadow-md whitespace-nowrap"><i class="fa-solid fa-comment-dots mr-1"></i> Chatbot FAQs</button>
+<button onclick="window.openAccountsModal()" class="role-super bg-slate-800 hover:bg-slate-900 text-white font-bold px-5 py-3 rounded-xl transition-colors shadow-md whitespace-nowrap"><i class="fa-solid fa-users-gear mr-2"></i>Accounts</button>
             </div>
 
             <!-- Pinned patients: manually pinned by staff so they're one tap away all day -->
@@ -188,7 +194,7 @@
                         <div class="flex-grow">
                             <div class="flex items-center gap-2">
                                 <h4 id="detail-patient-name" class="text-xl font-black text-slate-800"></h4>
-                                <button onclick="window.toggleNameEdit()" class="text-xs font-bold text-clinic hover:underline flex-shrink-0">Edit</button>
+                                <button onclick="window.toggleNameEdit()" class="role-super text-xs font-bold text-clinic hover:underline flex-shrink-0">Edit</button>
                             </div>
                             <div id="name-edit-row" class="hidden mt-2 flex gap-2 max-w-xs">
                                 <input type="text" id="edit-name-input" class="flex-grow px-3 py-2 rounded-lg border-2 border-slate-200 focus:outline-none focus:border-clinic bg-white font-bold text-slate-800 text-sm" placeholder="Full name">
@@ -199,7 +205,7 @@
 
                             <div class="flex items-center gap-2 mt-1">
                                 <p id="detail-patient-phone" class="text-sm text-slate-500 font-bold"></p>
-                                <button onclick="window.togglePhoneEdit()" class="text-xs font-bold text-clinic hover:underline">Edit</button>
+                                <button onclick="window.togglePhoneEdit()" class="role-super text-xs font-bold text-clinic hover:underline">Edit</button>
                             </div>
                             <div id="phone-edit-row" class="hidden mt-2 flex gap-2 max-w-xs">
                                 <input type="tel" id="edit-phone-input" class="flex-grow px-3 py-2 rounded-lg border-2 border-slate-200 focus:outline-none focus:border-clinic bg-white font-bold text-slate-800 text-sm" placeholder="07xxxxxxxxx">
@@ -207,11 +213,11 @@
                             </div>
                         </div>
                         <div class="flex flex-col gap-1 flex-shrink-0">
-                            <button id="detail-pin-btn" onclick="window.togglePin(window.currentDetailPatientId)" class="text-slate-300 hover:bg-clinic-light hover:text-clinic p-2 rounded-lg transition-colors" title="Pin patient"><i class="fa-solid fa-thumbtack"></i></button>
-                            <button onclick="window.deletePatientPrompt()" class="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors" title="Delete patient"><i class="fa-solid fa-trash-can"></i></button>
+                            <button id="detail-pin-btn" onclick="window.togglePin(window.currentDetailPatientId)" class="role-clinical text-slate-300 hover:bg-clinic-light hover:text-clinic p-2 rounded-lg transition-colors" title="Pin patient"><i class="fa-solid fa-thumbtack"></i></button>
+                            <button onclick="window.deletePatientPrompt()" class="role-super text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors" title="Delete patient"><i class="fa-solid fa-trash-can"></i></button>
                         </div>
                     </div>
-                    <div class="grid grid-cols-4 gap-1.5 mt-4">
+                    <div class="role-clinical grid grid-cols-4 gap-1.5 mt-4">
                         <button onclick="window.sendWhatsAppReminder('تركيب')" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 rounded-lg transition-colors shadow-md flex flex-col items-center justify-center gap-0.5 text-[11px]">
                             <i class="fa-brands fa-whatsapp text-sm"></i> تركيب
                         </button>
@@ -227,17 +233,17 @@
                         <input type="file" id="general-photo-input" accept="image/*" multiple class="hidden" onchange="window.handleGeneralPhotoSelect(event)">
                     </div>
 
-                    <div id="general-photos-section" class="hidden mt-4">
+                    <div id="general-photos-section" class="role-clinical hidden mt-4">
                         <p class="text-xs font-black text-slate-500 mb-2 uppercase tracking-wide">Patient Photos</p>
                         <div id="general-photos-row" class="flex flex-wrap gap-2"></div>
                     </div>
 
-                    <button onclick="window.openPatientSummary()" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-3 rounded-xl transition-colors shadow-md flex items-center justify-center gap-2 mt-4">
+                    <button onclick="window.openPatientSummary()" class="role-clinical w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-3 rounded-xl transition-colors shadow-md flex items-center justify-center gap-2 mt-4">
                         <i class="fa-solid fa-file-lines"></i> Patient Summary
                     </button>
                 </div>
 
-                <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+                <div class="role-clinical bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
                     <div class="flex justify-between items-center mb-4">
                         <h5 class="font-black text-slate-800 flex items-center gap-2"><i class="fa-solid fa-notes-medical text-clinic"></i> Case History</h5>
                         <button onclick="window.openAddCaseEntryForm()" class="text-sm font-bold text-clinic hover:bg-clinic-light px-3 py-1.5 rounded-lg transition-colors border border-clinic/20"><i class="fa-solid fa-plus mr-1"></i> Add Entry</button>
@@ -370,7 +376,7 @@
                 <div id="filling-materials-section" class="hidden">
                     <div class="flex justify-between items-center mb-2">
                         <label class="text-xs font-black text-slate-500 block uppercase tracking-wide">Filling Materials</label>
-                        <button type="button" onclick="window.openMaterialsModal()" class="text-xs font-bold text-clinic hover:underline">Manage</button>
+                        <button type="button" onclick="window.openMaterialsModal()" class="role-super text-xs font-bold text-clinic hover:underline">Manage</button>
                     </div>
                     <div class="bg-white border-2 border-slate-200 rounded-xl p-4 shadow-sm grid grid-cols-3 gap-2">
                         <div>
@@ -407,7 +413,35 @@
         </div>
     </div>
 
-    <!-- Materials Management Modal -->
+    <!-- Staff Accounts Modal (super admin only) -->
+<div id="accounts-modal" class="fixed inset-0 bg-slate-900/70 hidden items-center justify-center z-[170] p-4 backdrop-blur-md" dir="ltr" lang="en">
+<div class="bg-white rounded-3xl w-full max-w-2xl shadow-2xl max-h-[90vh] flex flex-col border border-slate-200">
+<div class="p-6 border-b border-slate-200 flex justify-between items-center">
+<h3 class="text-lg font-black text-slate-800">Staff Accounts</h3>
+<button onclick="window.closeAccountsModal()" class="text-slate-400 hover:text-white hover:bg-red-500 transition-colors w-8 h-8 rounded-full flex items-center justify-center"><i class="fa-solid fa-xmark"></i></button>
+</div>
+<div class="p-6 overflow-y-auto space-y-6">
+<div class="space-y-3">
+<h4 class="text-xs font-black text-slate-500 uppercase tracking-wide">New account</h4>
+<input type="text" id="acc-name" placeholder="Full name" class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:outline-none focus:border-clinic bg-white font-bold text-slate-800 text-sm">
+<input type="email" id="acc-email" placeholder="Email" autocomplete="off" class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:outline-none focus:border-clinic bg-white font-bold text-slate-800 text-sm">
+<input type="text" id="acc-password" placeholder="Password (at least 8 characters)" autocomplete="off" class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:outline-none focus:border-clinic bg-white font-bold text-slate-800 text-sm">
+<select id="acc-role" class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:outline-none focus:border-clinic bg-white font-bold text-slate-800 text-sm">
+<option value="dentist">Dentist — edits only their own work</option>
+<option value="secretary">Secretary — adds patients and sets the reception count</option>
+</select>
+<p id="acc-status" class="hidden text-sm font-bold text-center"></p>
+<button id="acc-create-btn" onclick="window.createStaffAccount()" class="w-full bg-clinic text-white font-black py-3.5 rounded-xl hover:bg-clinic-dark transition-colors shadow-md">Create account</button>
+</div>
+<div>
+<h4 class="text-xs font-black text-slate-500 uppercase tracking-wide mb-3">Existing accounts</h4>
+<div id="accounts-list" class="space-y-2"></div>
+</div>
+</div>
+</div>
+</div>
+
+<!-- Materials Management Modal -->
     <div id="materials-modal" class="fixed inset-0 bg-slate-900/70 hidden items-center justify-center z-[160] p-4 backdrop-blur-md" dir="ltr" lang="en">
         <div class="bg-white rounded-3xl w-full max-w-2xl shadow-2xl max-h-[90vh] flex flex-col border border-slate-200">
             <div class="p-6 border-b border-slate-200 flex justify-between items-center">
@@ -468,9 +502,9 @@
     </div>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, deleteDoc, onSnapshot, collection, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, deleteDoc, onSnapshot, collection, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
 
         const appId = 'almiral-center'; // any fixed string you like, just keep it consistent
@@ -503,6 +537,34 @@
         window.allPatients = [];
         window.currentDetailPatientId = null;
         window.pinnedQueue = []; // ordered array of pinned patient IDs
+
+        // ===== Roles: superadmin (fixed email) | dentist | secretary (stored in staff_users/{uid}) =====
+        const SUPER_ADMIN_EMAIL = 'almiral@gmail.com';
+        const STAFF_PATH = ['artifacts', appId, 'public', 'data', 'staff_users'];
+        window.currentRole = null;
+        window.currentUserName = '';
+        window.staffUsers = [];
+        async function resolveRoleInfo(user) {
+            if (!user || user.isAnonymous) return { role: null };
+            if ((user.email || '').toLowerCase() === SUPER_ADMIN_EMAIL) return { role: 'superadmin', name: 'Super Admin' };
+            try {
+                const snap = await getDoc(doc(db, ...STAFF_PATH, user.uid));
+                if (snap.exists() && ['dentist', 'secretary'].includes(snap.data().role)) {
+                    return { role: snap.data().role, name: snap.data().name || user.email };
+                }
+            } catch (e) { console.error('Role lookup failed:', e); }
+            return { role: null };
+        }
+        window.hasRole = (...roles) => roles.includes(window.currentRole);
+        function denyAction(msg) {
+            window.showMessage('Not Allowed', msg || 'Your account does not have permission to do this.', 'error');
+            return false;
+        }
+        // Super admin can edit anything; a dentist only entries they wrote themselves.
+        window.canEditEntry = function(entry) {
+            if (window.currentRole === 'superadmin') return true;
+            return window.currentRole === 'dentist' && !!entry && !!auth && !!auth.currentUser && entry.authorUid === auth.currentUser.uid;
+        };
 
         // Safety net: if anything unexpected throws anywhere on this page, show it instead of
         // leaving buttons that silently appear to do nothing.
@@ -591,14 +653,35 @@
         // This page is staff-only: no anonymous fallback like the main site.
         function initRecordsAuth() {
             if (!auth) return;
-            onAuthStateChanged(auth, (user) => {
+            onAuthStateChanged(auth, async (user) => {
                 if (user && !user.isAnonymous) {
+                    const info = await resolveRoleInfo(user);
+                    if (!info.role) {
+                        const errorEl = document.getElementById('staff-login-error');
+                        errorEl.textContent = 'This account has not been given a role yet. Please ask the super admin to activate it.';
+                        errorEl.classList.remove('hidden', 'text-green-600');
+                        errorEl.classList.add('text-red-500');
+                        await signOut(auth);
+                        return;
+                    }
+                    window.currentRole = info.role;
+                    window.currentUserName = info.name || user.email;
+                    document.body.dataset.role = info.role;
+                    const badge = document.getElementById('records-role-badge');
+                    badge.textContent = ({ superadmin: 'Super Admin', dentist: 'Dentist', secretary: 'Secretary' })[info.role] + ' · ' + window.currentUserName;
+                    badge.classList.remove('hidden');
                     document.getElementById('records-login-section').classList.add('hidden');
                     document.getElementById('records-main-section').classList.remove('hidden');
                     document.getElementById('records-logout-btn').classList.remove('hidden');
                     startRecordsListener();
                     renderToothChart();
+                    if (info.role === 'superadmin') startStaffUsersListener();
                 } else {
+                    window.currentRole = null;
+                    window.currentUserName = '';
+                    delete document.body.dataset.role;
+                    stopStaffUsersListener();
+                    document.getElementById('records-role-badge').classList.add('hidden');
                     document.getElementById('records-login-section').classList.remove('hidden');
                     document.getElementById('records-main-section').classList.add('hidden');
                     document.getElementById('records-logout-btn').classList.add('hidden');
@@ -828,6 +911,7 @@
         }
 
         window.togglePin = async function(patientId) {
+            if (!window.hasRole('dentist','superadmin')) { denyAction(); return; }
             if (!db) return;
             const queue = [...(window.pinnedQueue || [])];
             const idx = queue.indexOf(patientId);
@@ -837,6 +921,7 @@
         };
 
         window.movePinned = async function(patientId, direction) {
+            if (!window.hasRole('dentist','superadmin')) { denyAction(); return; }
             if (!db) return;
             const queue = [...(window.pinnedQueue || [])];
             const idx = queue.indexOf(patientId);
@@ -919,6 +1004,7 @@
 
 
         window.openAddPatientForm = function() {
+            if (!window.hasRole('secretary','superadmin')) { denyAction('Only the secretary or super admin can add patients.'); return; }
             document.getElementById('new-patient-name').value = '';
             document.getElementById('new-patient-id').value = getNextPatientId();
             document.getElementById('new-patient-phone').value = '';
@@ -953,12 +1039,14 @@
         };
 
         async function actuallySaveNewPatient(name, patientId, phone) {
+            if (!window.hasRole('secretary','superadmin')) { denyAction('Only the secretary or super admin can add patients.'); return; }
             try {
                 const newRef = doc(collection(db, 'artifacts', appId, 'public', 'data', 'patient_records'));
                 await setDoc(newRef, {
                     name, patientId, phone,
                     caseHistory: [],
-                    createdAt: serverTimestamp(),
+                    createdByUid: auth.currentUser.uid,
+            createdAt: serverTimestamp(),
                     updatedAt: serverTimestamp()
                 });
                 window.showMessage('Patient Added', name + ' was saved as patient #' + patientId + '.', 'success');
@@ -1002,7 +1090,7 @@
                 generalRow.innerHTML = generalPhotos.map((ph, i) => `
                     <div class="relative w-16 h-16">
                         <a href="${ph.url}" target="_blank"><img src="${ph.url}" class="w-16 h-16 object-cover rounded-lg border border-slate-200"></a>
-                        <button onclick="window.deleteGeneralPhoto(${i})" class="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] shadow-md"><i class="fa-solid fa-xmark"></i></button>
+                        ${(window.currentRole === 'superadmin' || (window.currentRole === 'dentist' && ph.authorUid && auth.currentUser && ph.authorUid === auth.currentUser.uid)) ? `<button onclick="window.deleteGeneralPhoto(${i})" class="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] shadow-md"><i class="fa-solid fa-xmark"></i></button>` : ''}
                     </div>`).join('');
             } else {
                 generalSection.classList.add('hidden');
@@ -1018,6 +1106,7 @@
                 <div class="flex gap-4 border border-slate-200 rounded-xl p-4 bg-slate-50">
                     <div class="text-left flex-shrink-0 w-24">
                         <p class="font-black text-slate-800 text-sm">${escapeHtml(entry.date || '')}</p>
+                            ${entry.authorName ? `<p class="text-[10px] font-bold text-slate-400 mt-1">${escapeHtml(entry.authorName)}</p>` : ''}
                     </div>
                     <div class="flex-grow border-l border-slate-200 pl-4">
                         <p class="text-slate-700 text-sm whitespace-pre-wrap">${escapeHtml(entry.notes || '')}</p>
@@ -1029,8 +1118,8 @@
                         ${entry.photos && entry.photos.length ? `<div class="flex flex-wrap gap-2 mt-3">${entry.photos.map(ph => `<a href="${ph.url}" target="_blank"><img src="${ph.url}" class="w-14 h-14 object-cover rounded-lg border border-slate-200 hover:opacity-80 transition-opacity"></a>`).join('')}</div>` : ''}
                     </div>
                     <div class="flex flex-col gap-2 flex-shrink-0">
-                        <button onclick="window.openAddCaseEntryForm('${entry.id}')" class="text-slate-300 hover:text-clinic transition-colors" title="Edit entry"><i class="fa-solid fa-pen"></i></button>
-                        <button onclick="window.deleteCaseEntry('${entry.id}')" class="text-slate-300 hover:text-red-500 transition-colors" title="Delete entry"><i class="fa-solid fa-trash-can"></i></button>
+                        ${window.canEditEntry(entry) ? `<button onclick="window.openAddCaseEntryForm('${entry.id}')" class="text-slate-300 hover:text-clinic transition-colors" title="Edit entry"><i class="fa-solid fa-pen"></i></button>
+                        <button onclick="window.deleteCaseEntry('${entry.id}')" class="text-slate-300 hover:text-red-500 transition-colors" title="Delete entry"><i class="fa-solid fa-trash-can"></i></button>` : ''}
                     </div>
                 </div>
             `).join('');
@@ -1419,6 +1508,7 @@
         };
 
         window.saveMaterials = async function() {
+            if (window.currentRole !== 'superadmin') { denyAction(); return; }
             if (!db) return;
             try {
                 const materialsRef = doc(db, 'artifacts', appId, 'public', 'data', 'clinic_state', 'filling_materials');
@@ -1477,6 +1567,7 @@
         };
 
         window.saveFaqs = async function() {
+            if (window.currentRole !== 'superadmin') { denyAction(); return; }
             if (!db) return;
             try {
                 const faqsRef = doc(db, 'artifacts', appId, 'public', 'data', 'clinic_state', 'chatbot_faqs');
@@ -1579,6 +1670,10 @@
         }
 
         window.openAddCaseEntryForm = function(editEntryId) {
+            if (!window.hasRole('dentist','superadmin')) { denyAction('Only dentists can add or edit case entries.'); return; }
+            { const _p = window.allPatients.find(x => x.id === window.currentDetailPatientId);
+              const _e = editEntryId && _p ? (_p.caseHistory || []).find(e => e.id === editEntryId) : null;
+              if (_e && !window.canEditEntry(_e)) { denyAction('You can only edit your own case entries.'); return; } }
             const p = window.allPatients.find(x => x.id === window.currentDetailPatientId);
             const existingEntry = editEntryId && p ? (p.caseHistory || []).find(e => e.id === editEntryId) : null;
             window.editingEntryId = existingEntry ? editEntryId : null;
@@ -1647,6 +1742,11 @@
             const p = window.allPatients.find(x => x.id === window.currentDetailPatientId);
             if (!p || !db) return;
 
+            if (!window.hasRole('dentist','superadmin')) { denyAction('Only dentists can add or edit case entries.'); return; }
+            if (window.editingEntryId) {
+                const _e = (p.caseHistory || []).find(e => e.id === window.editingEntryId);
+                if (!window.canEditEntry(_e)) { denyAction('You can only edit your own case entries.'); return; }
+            }
             const entryId = window.editingEntryId || (Date.now().toString(36) + Math.random().toString(36).slice(2, 7));
 
             try {
@@ -1658,7 +1758,7 @@
                         e.id === window.editingEntryId ? { ...e, date, notes, paid, remaining, teeth, procedure, canalDetails, fillingMaterials } : e
                     );
                 } else {
-                    updatedHistory = [...(p.caseHistory || []), { id: entryId, date, notes, paid, remaining, teeth, procedure, canalDetails, fillingMaterials }];
+                    updatedHistory = [...(p.caseHistory || []), { id: entryId, authorUid: auth.currentUser.uid, authorName: window.currentUserName, date, notes, paid, remaining, teeth, procedure, canalDetails, fillingMaterials }];
                 }
 
                 const patientRef = doc(db, 'artifacts', appId, 'public', 'data', 'patient_records', p.id);
@@ -1679,6 +1779,9 @@
         }
 
         window.deleteCaseEntry = function(entryId) {
+            { const _p = window.allPatients.find(x => x.id === window.currentDetailPatientId);
+              const _e = _p ? (_p.caseHistory || []).find(e => e.id === entryId) : null;
+              if (!window.canEditEntry(_e)) { denyAction('You can only delete your own case entries.'); return; } }
             window.showConfirm('Delete Entry', 'Are you sure you want to delete this case entry?', async () => {
                 const p = window.allPatients.find(x => x.id === window.currentDetailPatientId);
                 if (!p || !db) return;
@@ -1696,6 +1799,7 @@
         };
 
         window.deletePatientPrompt = function() {
+            if (window.currentRole !== 'superadmin') { denyAction(); return; }
             const p = window.allPatients.find(x => x.id === window.currentDetailPatientId);
             if (!p) return;
             window.showConfirm('Delete Patient', `This will permanently delete ${p.name} and their entire case history. Are you sure?`, async () => {
@@ -1732,6 +1836,7 @@
         };
 
         window.savePatientName = async function() {
+            if (window.currentRole !== 'superadmin') { denyAction(); return; }
             const p = window.allPatients.find(x => x.id === window.currentDetailPatientId);
             if (!p || !db) return;
             const name = document.getElementById('edit-name-input').value.trim();
@@ -1780,6 +1885,7 @@
         };
 
         window.savePatientPhone = async function() {
+            if (window.currentRole !== 'superadmin') { denyAction(); return; }
             const p = window.allPatients.find(x => x.id === window.currentDetailPatientId);
             if (!p || !db) return;
             const phone = document.getElementById('edit-phone-input').value.trim();
@@ -1899,6 +2005,7 @@
         // Standalone patient photos — not tied to any single case entry, uploaded directly from the patient's page.
 
         window.handleGeneralPhotoSelect = async function(event) {
+            if (!window.hasRole('dentist','superadmin')) return;
             const files = Array.from(event.target.files || []);
             event.target.value = '';
             const p = window.allPatients.find(x => x.id === window.currentDetailPatientId);
@@ -1912,7 +2019,7 @@
                     const storageRef = ref(storage, path);
                     await uploadBytes(storageRef, blob);
                     const url = await getDownloadURL(storageRef);
-                    uploaded.push({ url, path });
+                    uploaded.push({ url, path, authorUid: auth.currentUser.uid });
                 }
                 const updatedPhotos = [...(p.generalPhotos || []), ...uploaded];
                 const patientRef = doc(db, 'artifacts', appId, 'public', 'data', 'patient_records', p.id);
@@ -1926,6 +2033,8 @@
         window.deleteGeneralPhoto = function(index) {
             const p = window.allPatients.find(x => x.id === window.currentDetailPatientId);
             if (!p) return;
+            { const _ph = (p.generalPhotos || [])[index];
+              if (window.currentRole !== 'superadmin' && !(window.currentRole === 'dentist' && _ph && _ph.authorUid === auth.currentUser.uid)) { denyAction('You can only delete photos you added.'); return; } }
             window.showConfirm('Delete Photo', 'Remove this photo?', async () => {
                 const photos = [...(p.generalPhotos || [])];
                 const removed = photos.splice(index, 1)[0];
@@ -2020,6 +2129,111 @@
                 navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW registration failed:', err));
             });
         }
+        // ===== Staff accounts (super admin) =====
+        let staffUsersUnsub = null;
+        function startStaffUsersListener() {
+            if (staffUsersUnsub || !db) return;
+            staffUsersUnsub = onSnapshot(collection(db, ...STAFF_PATH), (snap) => {
+                window.staffUsers = [];
+                snap.forEach(d => window.staffUsers.push({ id: d.id, ...d.data() }));
+                renderStaffUsers();
+            }, (err) => console.error('Staff list error:', err));
+        }
+        function stopStaffUsersListener() {
+            if (staffUsersUnsub) { staffUsersUnsub(); staffUsersUnsub = null; }
+            window.staffUsers = [];
+        }
+        function renderStaffUsers() {
+            const list = document.getElementById('accounts-list');
+            if (!list) return;
+            const rows = [...window.staffUsers].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+            list.innerHTML = `<div class="flex items-center justify-between border border-slate-200 rounded-xl p-3 bg-slate-50"><div><p class="font-black text-slate-800 text-sm">Super Admin</p><p class="text-xs text-slate-500 font-bold">${escapeHtml(SUPER_ADMIN_EMAIL)}</p></div><span class="text-xs font-black text-clinic bg-clinic-light px-3 py-1 rounded-lg">superadmin</span></div>` +
+            rows.map(u => `
+                <div class="flex items-center justify-between gap-2 border border-slate-200 rounded-xl p-3">
+                    <div class="min-w-0"><p class="font-black text-slate-800 text-sm truncate">${escapeHtml(u.name || '')}</p><p class="text-xs text-slate-500 font-bold truncate">${escapeHtml(u.email || '')}</p></div>
+                    <div class="flex items-center gap-2 flex-shrink-0">
+                        <select onchange="window.changeStaffRole('${u.id}', this.value)" class="text-xs font-bold border-2 border-slate-200 rounded-lg px-2 py-1 bg-white text-slate-700">
+                            <option value="dentist" ${u.role === 'dentist' ? 'selected' : ''}>Dentist</option>
+                            <option value="secretary" ${u.role === 'secretary' ? 'selected' : ''}>Secretary</option>
+                        </select>
+                        <button onclick="window.removeStaffAccess('${u.id}')" class="text-red-500 hover:bg-red-50 px-2 py-1 rounded text-xs font-bold">Remove</button>
+                    </div>
+                </div>`).join('');
+        }
+        window.openAccountsModal = function() {
+            if (window.currentRole !== 'superadmin') { denyAction(); return; }
+            renderStaffUsers();
+            const m = document.getElementById('accounts-modal');
+            m.classList.remove('hidden'); m.classList.add('flex');
+        };
+        window.closeAccountsModal = function() {
+            const m = document.getElementById('accounts-modal');
+            m.classList.add('hidden'); m.classList.remove('flex');
+        };
+        window.createStaffAccount = async function() {
+            if (window.currentRole !== 'superadmin') { denyAction(); return; }
+            const name = document.getElementById('acc-name').value.trim();
+            const email = document.getElementById('acc-email').value.trim().toLowerCase();
+            const password = document.getElementById('acc-password').value;
+            const role = document.getElementById('acc-role').value;
+            const statusEl = document.getElementById('acc-status');
+            const btn = document.getElementById('acc-create-btn');
+            const setStatus = (msg, ok) => {
+                statusEl.textContent = msg;
+                statusEl.classList.remove('hidden', 'text-red-500', 'text-green-600');
+                statusEl.classList.add(ok ? 'text-green-600' : 'text-red-500');
+            };
+            if (!name || !email || !password) { setStatus('Please fill in name, email and password.', false); return; }
+            if (email === SUPER_ADMIN_EMAIL) { setStatus('That email belongs to the super admin.', false); return; }
+            if (password.length < 8) { setStatus('Password must be at least 8 characters.', false); return; }
+            if (!['dentist', 'secretary'].includes(role)) { setStatus('Choose a role.', false); return; }
+            btn.disabled = true;
+            let secApp = null, secAuth = null;
+            try {
+                // A second Firebase app instance creates the user, so the super admin stays signed in.
+                secApp = initializeApp(firebaseConfig, 'secondary-' + Date.now());
+                secAuth = getAuth(secApp);
+                let uid;
+                try {
+                    uid = (await createUserWithEmailAndPassword(secAuth, email, password)).user.uid;
+                } catch (e) {
+                    if (e.code !== 'auth/email-already-in-use') throw e;
+                    try { uid = (await signInWithEmailAndPassword(secAuth, email, password)).user.uid; }
+                    catch (e2) { const err = new Error('exists'); err.code = 'custom/exists'; throw err; }
+                }
+                await setDoc(doc(db, ...STAFF_PATH, uid), { email, name, role, createdBy: auth.currentUser.uid, createdAt: serverTimestamp() });
+                ['acc-name', 'acc-email', 'acc-password'].forEach(id => document.getElementById(id).value = '');
+                setStatus('Account created for ' + name + ' (' + role + ').', true);
+            } catch (e) {
+                console.error(e);
+                const msgs = {
+                    'auth/weak-password': 'Password is too weak.',
+                    'auth/invalid-email': 'That email address is not valid.',
+                    'auth/operation-not-allowed': 'Email/Password sign-in is not enabled in the Firebase console.',
+                    'custom/exists': 'That email already has an account with a different password. Use another email, or enter its current password.',
+                    'permission-denied': 'Firestore rules blocked this. Publish the provided firestore.rules first.'
+                };
+                setStatus(msgs[e.code] || 'Could not create the account. Please try again.', false);
+            } finally {
+                try { if (secAuth) await signOut(secAuth); } catch (e) {}
+                try { if (secApp) await deleteApp(secApp); } catch (e) {}
+                btn.disabled = false;
+            }
+        };
+        window.changeStaffRole = async function(uid, role) {
+            if (window.currentRole !== 'superadmin' || !['dentist', 'secretary'].includes(role)) return;
+            try { await setDoc(doc(db, ...STAFF_PATH, uid), { role }, { merge: true }); }
+            catch (e) { console.error(e); window.showMessage('Failed', 'Could not change the role.', 'error'); }
+        };
+        window.removeStaffAccess = function(uid) {
+            if (window.currentRole !== 'superadmin') return;
+            const u = window.staffUsers.find(x => x.id === uid);
+            window.showConfirm('Remove Access', 'Remove ' + (u ? u.name : 'this user') + '? They will no longer be able to open the system.', async () => {
+                try { await deleteDoc(doc(db, ...STAFF_PATH, uid)); }
+                catch (e) { console.error(e); window.showMessage('Failed', 'Could not remove this account.', 'error'); }
+            });
+        };
+
 
         window.syncDarkModeIcon();
         initRecordsAuth();
