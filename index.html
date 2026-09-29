@@ -281,7 +281,7 @@
                 </div>
                 <div class="bg-slate-50 p-4 rounded-2xl border border-slate-100">
                     <div class="flex justify-between items-end mb-4">
-                        <label class="block text-sm font-bold text-slate-700"><i class="fa-regular fa-clock ml-1 text-clinic"></i> اختر الوقت (5م - 9م) <span class="text-red-500">*</span></label>
+                        <label class="block text-sm font-bold text-slate-700"><i class="fa-regular fa-clock ml-1 text-clinic"></i> اختر الوقت <span class="text-red-500">*</span></label>
                         <span class="text-xs font-bold text-clinic bg-clinic-light px-2 py-1 rounded-md">المدة 30 دقيقة</span>
                     </div>
                     <div id="times-empty-state" class="text-sm text-slate-500 p-8 border-2 border-dashed border-slate-300 rounded-xl text-center bg-white flex flex-col items-center justify-center gap-2">
@@ -504,7 +504,19 @@
         window.selectedTime = null;
         window.bookingsDB = JSON.parse(localStorage.getItem('almiralBookingsV2')) || {}; 
 
-        const TIME_SLOTS = ["05:00 PM", "05:30 PM", "06:00 PM", "06:30 PM", "07:00 PM", "07:30 PM", "08:00 PM", "08:30 PM", "09:00 PM"];
+        const EVENING_SLOTS = ["05:00 PM", "05:30 PM", "06:00 PM", "06:30 PM", "07:00 PM", "07:30 PM", "08:00 PM", "08:30 PM", "09:00 PM"];
+        const MORNING_SLOTS = ["10:00 AM", "10:30 AM", "11:00 AM", "11:30 AM"]; // Sunday–Thursday only
+        // Sunday–Thursday: morning + evening. Friday and Saturday: evening only.
+        function slotsForDate(dateIso) {
+            const day = new Date(dateIso + 'T00:00:00').getDay(); // 0 = Sunday ... 4 = Thursday
+            return (day >= 0 && day <= 4) ? MORNING_SLOTS.concat(EVENING_SLOTS) : EVENING_SLOTS;
+        }
+        function timeToMinutes(t) {
+            const m = t.match(/(\d+):(\d+) (AM|PM)/); if (!m) return 0;
+            let h = parseInt(m[1], 10) % 12; if (m[3] === 'PM') h += 12;
+            return h * 60 + parseInt(m[2], 10);
+        }
+        function fmtTime(t) { return t.replace(' PM', ' م').replace(' AM', ' ص'); }
 
         // A real (non-anonymous) signed-in user is staff — patients booking appointments
         // are always anonymous, so this cleanly tells the two apart.
@@ -815,11 +827,6 @@
                 const d = new Date(today);
                 d.setDate(today.getDate() + dayOffset);
 
-                if (d.getDay() === 5) { // 5 = Friday, clinic holiday
-                    dayOffset++;
-                    continue;
-                }
-
                 const fDate = formatDateForDisplay(d);
                 const btn = document.createElement('button');
                 btn.type = 'button';
@@ -852,17 +859,17 @@
             container.classList.remove('hidden');
             const dateBookings = window.bookingsDB[dateIso] || {};
             
-            TIME_SLOTS.forEach(time => {
+            slotsForDate(dateIso).forEach(time => {
                 const btn = document.createElement('button');
                 btn.type = 'button';
                 const isBooked = !!dateBookings[time];
                 if (isBooked) {
                     btn.className = 'py-3 px-1 rounded-xl border-2 border-slate-100 text-sm font-bold text-center disabled-time relative bg-slate-100';
-                    btn.innerHTML = `<span class="line-through decoration-slate-400 decoration-2">${time.replace(' PM', ' م')}</span><div class="absolute inset-0 flex items-center justify-center bg-slate-200/80 backdrop-blur-[1px]"><span class="text-xs text-slate-600 font-black tracking-wider"><i class="fa-solid fa-lock mr-1"></i> محجوز</span></div>`;
+                    btn.innerHTML = `<span class="line-through decoration-slate-400 decoration-2">${fmtTime(time)}</span><div class="absolute inset-0 flex items-center justify-center bg-slate-200/80 backdrop-blur-[1px]"><span class="text-xs text-slate-600 font-black tracking-wider"><i class="fa-solid fa-lock mr-1"></i> محجوز</span></div>`;
                     btn.disabled = true;
                 } else {
                     btn.className = 'py-3 px-1 rounded-xl border-2 border-slate-200 bg-white hover:border-clinic hover:text-clinic text-slate-700 text-sm font-black text-center transition-all time-btn shadow-sm';
-                    btn.innerHTML = time.replace(' PM', ' م');
+                    btn.innerHTML = fmtTime(time);
                     
                     if(window.selectedTime === time) {
                         btn.classList.remove('border-slate-200', 'bg-white');
@@ -891,10 +898,6 @@
                 window.showMessage("بيانات ناقصة", "يرجى ملء جميع الحقول واختيار الموعد.", "error");
                 return;
             }
-            if (new Date(window.selectedDate + 'T00:00:00').getDay() === 5) {
-                window.showMessage("المركز مغلق", "المركز مغلق يوم الجمعة. يرجى اختيار يوم آخر.", "error");
-                return;
-            }
             if (window.bookingsDB[window.selectedDate] && window.bookingsDB[window.selectedDate][window.selectedTime]) {
                 window.showMessage("عذراً", "هذا الوقت تم حجزه للتو من قبل شخص آخر.", "error");
                 window.generateTimeButtons(window.selectedDate);
@@ -920,7 +923,7 @@
                 return;
             }
 
-            const waMessage = `✨ *حجز جديد - مركز الميرال* ✨%0A👤 *الاسم:* ${name}%0A📱 *الهاتف:* ${phone}%0A🗓 *التاريخ:* ${window.selectedDate}%0A⏰ *الوقت:* ${window.selectedTime.replace(' PM', ' م')}%0A🦷 *السبب:* ${reasonsArr.join('، ')}`;
+            const waMessage = `✨ *حجز جديد - مركز الميرال* ✨%0A👤 *الاسم:* ${name}%0A📱 *الهاتف:* ${phone}%0A🗓 *التاريخ:* ${window.selectedDate}%0A⏰ *الوقت:* ${fmtTime(window.selectedTime)}%0A🦷 *السبب:* ${reasonsArr.join('، ')}`;
             if (window.CENTER.whatsapp) window.open(`https://wa.me/${window.waNumber(window.CENTER.whatsapp)}?text=${waMessage}`, '_blank');
             
             document.getElementById('booking-form').reset();
@@ -1068,7 +1071,7 @@
                 const timesWrapper = document.createElement('div');
                 timesWrapper.className = 'border-x border-b border-slate-200 bg-white rounded-b-xl divide-y divide-slate-100';
                 
-                Object.keys(window.bookingsDB[date]).sort().forEach(time => {
+                Object.keys(window.bookingsDB[date]).sort((a, b) => timeToMinutes(a) - timeToMinutes(b)).forEach(time => {
                     const b = window.bookingsDB[date][time];
                     const item = document.createElement('div');
                     item.className = 'p-4 flex justify-between items-center';
@@ -1079,7 +1082,7 @@
                             <div class="flex flex-wrap gap-1 mt-2">${b.reasons.map(r => `<span class="bg-teal-50 text-clinic px-2 py-1 rounded-md text-[10px] font-bold border border-blue-100">${r}</span>`).join('')}</div>
                         </div>
                         <div class="flex flex-col gap-2 items-end">
-                            <span class="bg-clinic text-white font-bold px-3 py-1 rounded-lg text-sm"><i class="fa-regular fa-clock ml-1"></i>${time.replace(' PM', ' م')}</span>
+                            <span class="bg-clinic text-white font-bold px-3 py-1 rounded-lg text-sm"><i class="fa-regular fa-clock ml-1"></i>${fmtTime(time)}</span>
                             <button onclick="requestDeleteBooking('${date}', '${time}')" class="text-red-500 hover:bg-red-50 px-2 py-1 rounded transition-colors text-xs font-bold"><i class="fa-solid fa-trash-can ml-1"></i>حذف</button>
                         </div>
                     `;
