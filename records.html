@@ -294,6 +294,11 @@
                     <input type="date" id="new-entry-date" class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:outline-none focus:border-clinic bg-white font-bold text-slate-800 shadow-sm">
                 </div>
 
+<div class="role-super">
+<label class="text-xs font-black text-slate-500 mb-1.5 block uppercase tracking-wide">Treated by</label>
+<select id="new-entry-doctor" class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:outline-none focus:border-clinic bg-white font-bold text-slate-800 shadow-sm"></select>
+</div>
+
                 <div>
                     <label class="text-xs font-black text-slate-500 mb-1.5 block uppercase tracking-wide">Procedure</label>
                     <select id="new-entry-procedure" onchange="window.onProcedureChange()" class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:outline-none focus:border-clinic bg-white font-bold text-slate-800 shadow-sm">
@@ -560,7 +565,13 @@
             window.showMessage('Not Allowed', msg || 'Your account does not have permission to do this.', 'error');
             return false;
         }
-        // Super admin can edit anything; a dentist only entries they wrote themselves.
+        // "Dr. Name" label (keeps names that already start with Dr / د., and leaves Super Admin alone)
+function drLabel(name) {
+    const n = (name || '').trim();
+    if (!n || n === 'Super Admin' || /^(dr\.?|د\.?)(\s|$)/i.test(n)) return n;
+    return 'Dr. ' + n;
+}
+// Super admin can edit anything; a dentist only entries they wrote themselves.
         window.canEditEntry = function(entry) {
             if (window.currentRole === 'superadmin') return true;
             return window.currentRole === 'dentist' && !!entry && !!auth && !!auth.currentUser && entry.authorUid === auth.currentUser.uid;
@@ -1106,9 +1117,9 @@
                 <div class="flex gap-4 border border-slate-200 rounded-xl p-4 bg-slate-50">
                     <div class="text-left flex-shrink-0 w-24">
                         <p class="font-black text-slate-800 text-sm">${escapeHtml(entry.date || '')}</p>
-                            ${entry.authorName ? `<p class="text-[10px] font-bold text-slate-400 mt-1">${escapeHtml(entry.authorName)}</p>` : ''}
                     </div>
                     <div class="flex-grow border-l border-slate-200 pl-4">
+${entry.authorName ? `<p class="inline-flex items-center gap-1.5 text-xs font-black px-2.5 py-1 rounded-lg mb-2" style="background:#ccfbf1;color:#134e4a"><i class="fa-solid fa-user-doctor"></i> ${escapeHtml(drLabel(entry.authorName))}</p>` : ''}
                         <p class="text-slate-700 text-sm whitespace-pre-wrap">${escapeHtml(entry.notes || '')}</p>
                         ${entry.teeth && entry.teeth.length ? `<p class="text-xs font-bold text-slate-500 mt-2">Teeth: ${entry.teeth.join(', ')}${entry.procedure ? ' · ' + escapeHtml(entry.procedure) : ''}</p>` : (entry.procedure ? `<p class="text-xs font-bold text-slate-500 mt-2">${escapeHtml(entry.procedure)}</p>` : '')}
                         <div class="flex gap-2 mt-3">
@@ -1681,6 +1692,13 @@
             document.getElementById('entry-modal-title').textContent = existingEntry ? 'Edit Case Entry' : 'New Case Entry';
             document.getElementById('entry-modal-patient-name').textContent = p ? p.name + (p.patientId ? ' · ID ' + p.patientId : '') : '';
             document.getElementById('new-entry-date').value = existingEntry ? existingEntry.date : new Date().toISOString().split('T')[0];
+            { const sel = document.getElementById('new-entry-doctor');
+              if (sel) {
+                const dentists = (window.staffUsers || []).filter(u => u.role === 'dentist').sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+                sel.innerHTML = '<option value="">Myself (Super Admin)</option>' + dentists.map(u => `<option value="${u.id}">${escapeHtml(drLabel(u.name))}</option>`).join('');
+                const cur = existingEntry && dentists.some(u => u.id === existingEntry.authorUid) ? existingEntry.authorUid : '';
+                sel.value = cur; window.entryDoctorInitial = cur;
+              } }
             document.getElementById('new-entry-notes').value = existingEntry ? stripCanalBlock(existingEntry.notes || '') : '';
             document.getElementById('new-entry-paid').value = existingEntry && existingEntry.paid ? existingEntry.paid : '';
             document.getElementById('new-entry-remaining').value = existingEntry && existingEntry.remaining ? existingEntry.remaining : '';
@@ -1751,14 +1769,23 @@
 
             try {
                 let updatedHistory;
+                let authorUid = auth.currentUser.uid, authorName = window.currentUserName, doctorChanged = false;
+                if (window.currentRole === 'superadmin') {
+                    const sel = document.getElementById('new-entry-doctor');
+                    if (sel) {
+                        doctorChanged = sel.value !== (window.entryDoctorInitial || '');
+                        const d = sel.value ? (window.staffUsers || []).find(u => u.id === sel.value) : null;
+                        if (d) { authorUid = d.id; authorName = d.name; }
+                    }
+                }
                 if (window.editingEntryId) {
                     // Spreading ...e first preserves any older fields (like photos from before this
                     // feature was removed) that aren't explicitly touched here.
                     updatedHistory = (p.caseHistory || []).map(e =>
-                        e.id === window.editingEntryId ? { ...e, date, notes, paid, remaining, teeth, procedure, canalDetails, fillingMaterials } : e
+                        e.id === window.editingEntryId ? { ...e, date, notes, paid, remaining, teeth, procedure, canalDetails, fillingMaterials, ...(doctorChanged ? { authorUid, authorName } : {}) } : e
                     );
                 } else {
-                    updatedHistory = [...(p.caseHistory || []), { id: entryId, authorUid: auth.currentUser.uid, authorName: window.currentUserName, date, notes, paid, remaining, teeth, procedure, canalDetails, fillingMaterials }];
+                    updatedHistory = [...(p.caseHistory || []), { id: entryId, authorUid, authorName, date, notes, paid, remaining, teeth, procedure, canalDetails, fillingMaterials }];
                 }
 
                 const patientRef = doc(db, 'artifacts', appId, 'public', 'data', 'patient_records', p.id);
@@ -2065,6 +2092,7 @@
                 const treatment = [e.teeth && e.teeth.length ? 'Teeth: ' + e.teeth.join(', ') : '', e.procedure || ''].filter(Boolean).join(' · ') || '—';
                 return `<tr>
                     <td>${escapeHtml(e.date || '')}</td>
+<td>${escapeHtml(e.authorName ? drLabel(e.authorName) : '—')}</td>
                     <td>${escapeHtml(treatment)}</td>
                     <td>${escapeHtml(e.notes || '')}</td>
                     <td class="paid">${Number(e.paid || 0).toLocaleString()}</td>
@@ -2108,9 +2136,9 @@
     <div class="info-row"><span class="info-label">Total Visits</span><span>${entries.length}</span></div>
 
     <table>
-      <thead><tr><th>Date</th><th>Treatment</th><th>Notes</th><th>Paid</th><th>Remaining</th></tr></thead>
-      <tbody>${rows || '<tr><td colspan="5" style="text-align:center;color:#999;">No case history yet.</td></tr>'}</tbody>
-      ${entries.length ? `<tfoot><tr><td colspan="3" class="totals-label">Total Paid</td><td class="paid">${totalPaid.toLocaleString()}</td><td></td></tr></tfoot>` : ''}
+      <thead><tr><th>Date</th><th>Doctor</th><th>Treatment</th><th>Notes</th><th>Paid</th><th>Remaining</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="6" style="text-align:center;color:#999;">No case history yet.</td></tr>'}</tbody>
+      ${entries.length ? `<tfoot><tr><td colspan="4" class="totals-label">Total Paid</td><td class="paid">${totalPaid.toLocaleString()}</td><td></td></tr></tfoot>` : ''}
     </table>
 
     <button class="print-btn" onclick="window.print()">Print This Sheet</button>
