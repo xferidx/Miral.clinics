@@ -124,6 +124,7 @@
                 <button onclick="window.openEndoFollowups()" class="role-clinical bg-amber-500 hover:bg-amber-600 text-white font-bold px-5 py-3 rounded-xl transition-colors shadow-md whitespace-nowrap"><i class="fa-solid fa-tooth mr-1"></i> Endo Follow-Ups</button>
                 <button onclick="window.openFaqsModal()" class="role-super bg-teal-500 hover:bg-teal-600 text-white font-bold px-5 py-3 rounded-xl transition-colors shadow-md whitespace-nowrap"><i class="fa-solid fa-comment-dots mr-1"></i> Chatbot FAQs</button>
 <button onclick="window.openAccountsModal()" class="role-super bg-slate-800 hover:bg-slate-900 text-white font-bold px-5 py-3 rounded-xl transition-colors shadow-md whitespace-nowrap"><i class="fa-solid fa-users-gear mr-2"></i>Accounts</button>
+<button onclick="window.openFinanceModal()" class="role-super bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-5 py-3 rounded-xl transition-colors shadow-md whitespace-nowrap"><i class="fa-solid fa-file-invoice-dollar ml-2"></i>الحسابات</button>
             </div>
 
             <!-- Pinned patients: manually pinned by staff so they're one tap away all day -->
@@ -418,7 +419,29 @@
         </div>
     </div>
 
-    <!-- Staff Accounts Modal (super admin only) -->
+    <!-- Finance report modal (super admin only) -->
+<div id="finance-modal" class="fixed inset-0 bg-slate-900/70 hidden items-center justify-center z-[170] p-4 backdrop-blur-md" dir="rtl" lang="ar">
+<div class="bg-white rounded-3xl w-full max-w-3xl shadow-2xl max-h-[92vh] flex flex-col border border-slate-200">
+<div class="p-5 border-b border-slate-200 flex justify-between items-center">
+<h3 class="text-lg font-black text-slate-800"><i class="fa-solid fa-file-invoice-dollar ml-2 text-emerald-600"></i>الحسابات</h3>
+<button onclick="window.closeFinanceModal()" class="text-slate-400 hover:text-white hover:bg-red-500 transition-colors w-8 h-8 rounded-full flex items-center justify-center"><i class="fa-solid fa-xmark"></i></button>
+</div>
+<div class="p-5 overflow-y-auto">
+<div class="grid grid-cols-2 gap-3">
+<div><label class="text-xs font-black text-slate-500 mb-1.5 block">من تاريخ</label>
+<input type="date" id="finance-from" class="w-full px-3 py-3 rounded-xl border-2 border-slate-200 focus:outline-none focus:border-clinic bg-white font-bold text-slate-800 text-sm"></div>
+<div><label class="text-xs font-black text-slate-500 mb-1.5 block">إلى تاريخ</label>
+<input type="date" id="finance-to" class="w-full px-3 py-3 rounded-xl border-2 border-slate-200 focus:outline-none focus:border-clinic bg-white font-bold text-slate-800 text-sm"></div>
+</div>
+<label class="text-xs font-black text-slate-500 mt-3 mb-1.5 block">الطبيب</label>
+<select id="finance-doctor" class="w-full px-3 py-3 rounded-xl border-2 border-slate-200 focus:outline-none focus:border-clinic bg-white font-bold text-slate-800 text-sm"></select>
+<button onclick="window.generateFinanceReport()" class="w-full mt-4 bg-clinic text-white font-black py-3.5 rounded-xl hover:bg-clinic-dark transition-colors shadow-md">عرض التقرير</button>
+<div id="finance-results" class="mt-5"></div>
+</div>
+</div>
+</div>
+
+<!-- Staff Accounts Modal (super admin only) -->
 <div id="accounts-modal" class="fixed inset-0 bg-slate-900/70 hidden items-center justify-center z-[170] p-4 backdrop-blur-md" dir="ltr" lang="en">
 <div class="bg-white rounded-3xl w-full max-w-2xl shadow-2xl max-h-[90vh] flex flex-col border border-slate-200">
 <div class="p-6 border-b border-slate-200 flex justify-between items-center">
@@ -2179,6 +2202,108 @@ ${entry.authorName ? `<p class="inline-flex items-center gap-1.5 text-xs font-bl
                 navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW registration failed:', err));
             });
         }
+        // ===== الحسابات: finance report (super admin only) =====
+        window.financeReport = null;
+        function financeDoctorMap() {
+            const map = new Map();
+            (window.staffUsers || []).filter(u => u.role === 'dentist').forEach(u => map.set(u.id, drLabel(u.name || u.email)));
+            (window.allPatients || []).forEach(p => (p.caseHistory || []).forEach(e => {
+                const key = e.authorUid || '__none';
+                if (!map.has(key)) map.set(key, e.authorUid ? drLabel(e.authorName || 'Unknown') : 'غير مسجّل');
+            }));
+            return map;
+        }
+        function isoDate(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+        window.openFinanceModal = function() {
+            if (window.currentRole !== 'superadmin') { denyAction(); return; }
+            const sel = document.getElementById('finance-doctor');
+            const map = financeDoctorMap();
+            sel.innerHTML = '<option value="__all">كل الأطباء</option>' +
+                [...map.entries()].sort((a, b) => a[1].localeCompare(b[1], 'ar')).map(([k, v]) => `<option value="${escapeHtml(k)}">${escapeHtml(v)}</option>`).join('');
+            const fromEl = document.getElementById('finance-from'), toEl = document.getElementById('finance-to');
+            if (!toEl.value) { const t = new Date(); toEl.value = isoDate(t); fromEl.value = isoDate(new Date(t.getFullYear(), t.getMonth(), 1)); }
+            document.getElementById('finance-results').innerHTML = '';
+            window.financeReport = null;
+            const m = document.getElementById('finance-modal');
+            m.classList.remove('hidden'); m.classList.add('flex');
+        };
+        window.closeFinanceModal = function() {
+            const m = document.getElementById('finance-modal');
+            m.classList.add('hidden'); m.classList.remove('flex');
+        };
+        window.generateFinanceReport = function() {
+            if (window.currentRole !== 'superadmin') { denyAction(); return; }
+            const from = document.getElementById('finance-from').value;
+            const to = document.getElementById('finance-to').value;
+            const docKey = document.getElementById('finance-doctor').value;
+            const out = document.getElementById('finance-results');
+            if (!from || !to) { out.innerHTML = '<p class="text-center text-red-500 font-bold text-sm">اختر تاريخ البداية والنهاية.</p>'; return; }
+            if (from > to) { out.innerHTML = '<p class="text-center text-red-500 font-bold text-sm">تاريخ البداية يجب أن يكون قبل تاريخ النهاية.</p>'; return; }
+            const map = financeDoctorMap();
+            const rows = [];
+            (window.allPatients || []).forEach(p => (p.caseHistory || []).forEach(e => {
+                const paid = Number(e.paid || 0);
+                if (!(paid > 0)) return;                       // income only: money actually paid
+                const d = e.date || '';
+                if (d < from || d > to) return;
+                const key = e.authorUid || '__none';
+                if (docKey !== '__all' && key !== docKey) return;
+                rows.push({ patient: p.name || '—', date: d, procedure: e.procedure || '—', amount: paid, doctor: map.get(key) || '—' });
+            }));
+            rows.sort((a, b) => a.date.localeCompare(b.date) || a.patient.localeCompare(b.patient, 'ar'));
+            const total = rows.reduce((s, r) => s + r.amount, 0);
+            const byDoctor = {};
+            rows.forEach(r => { byDoctor[r.doctor] = (byDoctor[r.doctor] || 0) + r.amount; });
+            const doctorLabel = docKey === '__all' ? 'كل الأطباء' : (map.get(docKey) || '');
+            window.financeReport = { from, to, doctorLabel, rows, total, byDoctor, showDoctor: docKey === '__all' };
+            const fmt = n => Number(n).toLocaleString('en-US');
+            if (rows.length === 0) {
+                out.innerHTML = '<p class="text-center text-slate-500 font-bold text-sm py-6">لا توجد إيرادات في هذه الفترة.</p>';
+                return;
+            }
+            out.innerHTML = `
+                <div class="rounded-2xl p-5 text-center" style="background:#ccfbf1;color:#134e4a">
+                    <p class="text-xs font-black opacity-80">${escapeHtml(doctorLabel)} · ${escapeHtml(from)} → ${escapeHtml(to)}</p>
+                    <p class="text-3xl font-black mt-1" dir="ltr">${fmt(total)}</p>
+                    <p class="text-xs font-bold mt-1">إجمالي الإيرادات · ${rows.length} دفعة</p>
+                </div>
+                <div class="overflow-x-auto mt-4 border border-slate-200 rounded-xl">
+                    <table class="w-full text-sm text-right">
+                        <thead class="bg-slate-100 text-slate-600 text-xs"><tr>
+                            <th class="p-3">المريض</th><th class="p-3">التاريخ</th>${window.financeReport.showDoctor ? '<th class="p-3">الطبيب</th>' : ''}<th class="p-3">الإجراء</th><th class="p-3">المبلغ</th>
+                        </tr></thead>
+                        <tbody>${rows.map(r => `<tr class="border-t border-slate-100">
+                            <td class="p-3 font-bold text-slate-800">${escapeHtml(r.patient)}</td>
+                            <td class="p-3 text-slate-600 whitespace-nowrap" dir="ltr">${escapeHtml(r.date)}</td>
+                            ${window.financeReport.showDoctor ? `<td class="p-3 text-slate-600">${escapeHtml(r.doctor)}</td>` : ''}
+                            <td class="p-3 text-slate-600">${escapeHtml(r.procedure)}</td>
+                            <td class="p-3 font-black text-green-700 whitespace-nowrap" dir="ltr">${fmt(r.amount)}</td>
+                        </tr>`).join('')}</tbody>
+                        <tfoot><tr class="border-t-2 border-slate-300 bg-slate-50 font-black text-slate-800">
+                            <td class="p-3" colspan="${window.financeReport.showDoctor ? 4 : 3}">المجموع</td><td class="p-3 whitespace-nowrap" dir="ltr">${fmt(total)}</td>
+                        </tr></tfoot>
+                    </table>
+                </div>
+                ${window.financeReport.showDoctor ? `<div class="mt-4 space-y-1">${Object.entries(byDoctor).sort((a, b) => b[1] - a[1]).map(([n, v]) => `<div class="flex justify-between text-sm font-bold text-slate-700 bg-slate-50 rounded-lg px-3 py-2"><span>${escapeHtml(n)}</span><span dir="ltr">${fmt(v)}</span></div>`).join('')}</div>` : ''}
+                <button onclick="window.printFinanceReport()" class="w-full mt-4 bg-slate-800 hover:bg-slate-900 text-white font-black py-3 rounded-xl transition-colors"><i class="fa-solid fa-print ml-2"></i>طباعة التقرير</button>`;
+        };
+        window.printFinanceReport = function() {
+            const r = window.financeReport;
+            if (!r || !r.rows.length) return;
+            const fmt = n => Number(n).toLocaleString('en-US');
+            const html = `<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>تقرير الحسابات</title>
+<style>body{font-family:Arial,Tahoma,sans-serif;margin:24px;color:#111}h1{font-size:20px;margin:0 0 4px}p{margin:2px 0;color:#444;font-size:13px}
+table{width:100%;border-collapse:collapse;margin-top:14px;font-size:13px}th,td{border:1px solid #ccc;padding:7px 9px;text-align:right}th{background:#f1f5f9}
+.num{direction:ltr;text-align:right;white-space:nowrap}.tot td{font-weight:bold;background:#f8fafc}button{margin-top:16px;padding:10px 18px;font-size:14px}@media print{button{display:none}}</style></head><body>
+<h1>مركز الميرال — تقرير الحسابات</h1>
+<p>الطبيب: <b>${escapeHtml(r.doctorLabel)}</b></p><p>الفترة: <b>${escapeHtml(r.from)}</b> إلى <b>${escapeHtml(r.to)}</b></p>
+<table><thead><tr><th>المريض</th><th>التاريخ</th>${r.showDoctor ? '<th>الطبيب</th>' : ''}<th>الإجراء</th><th>المبلغ</th></tr></thead><tbody>
+${r.rows.map(x => `<tr><td>${escapeHtml(x.patient)}</td><td class="num">${escapeHtml(x.date)}</td>${r.showDoctor ? `<td>${escapeHtml(x.doctor)}</td>` : ''}<td>${escapeHtml(x.procedure)}</td><td class="num">${fmt(x.amount)}</td></tr>`).join('')}
+<tr class="tot"><td colspan="${r.showDoctor ? 4 : 3}">المجموع</td><td class="num">${fmt(r.total)}</td></tr></tbody></table>
+<button onclick="window.print()">طباعة</button></body></html>`;
+            window.open(URL.createObjectURL(new Blob([html], { type: 'text/html' })), '_blank');
+        };
+
         // ===== Staff accounts (super admin) =====
         let staffUsersUnsub = null;
         function startStaffUsersListener() {
